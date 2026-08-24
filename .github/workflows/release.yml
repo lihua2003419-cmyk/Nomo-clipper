@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$TAG_VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Tag version $TAG_VERSION does not match package.json $PACKAGE_VERSION"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Reject critical development vulnerabilities
+        run: npm audit --audit-level=critical
+
+      - name: Type check
+        run: npm run compile
+
+      - name: Build release archives
+        run: |
+          npm run zip
+          npm run zip:edge
+
+      - name: Verify content script is ASCII
+        run: |
+          node -e "const fs=require('fs');const p='.output/chrome-mv3/content-scripts/content.js';const b=fs.readFileSync(p);if([...b].some(x=>x>127)){console.error('content.js contains non-ASCII bytes');process.exit(1)}"
+
+      - name: Create stable latest aliases
+        shell: bash
+        run: |
+          cp ".output/nomo-clipper-${GITHUB_REF_NAME#v}-chrome.zip" \
+            ".output/nomo-clipper-chrome.zip"
+          cp ".output/nomo-clipper-${GITHUB_REF_NAME#v}-edge.zip" \
+            ".output/nomo-clipper-edge.zip"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          NOTES_FILE="RELEASE_NOTES_${GITHUB_REF_NAME}.md"
+          ASSETS=(
+            ".output/nomo-clipper-${GITHUB_REF_NAME#v}-chrome.zip"
+            ".output/nomo-clipper-${GITHUB_REF_NAME#v}-edge.zip"
+            ".output/nomo-clipper-chrome.zip"
+            ".output/nomo-clipper-edge.zip"
+          )
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite immutable assets."
+            exit 1
+          elif [[ -f "$NOTES_FILE" ]]; then
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+              --title "Nomo Clipper ${GITHUB_REF_NAME#v}" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+              --title "Nomo Clipper ${GITHUB_REF_NAME#v}" \
+              --generate-notes
+          fi

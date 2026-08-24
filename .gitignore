@@ -1,0 +1,45 @@
+# 依赖
+node_modules/
+local-transcriber/.venv/
+local-transcriber/.uv-cache/
+local-transcriber/__pycache__/
+local-transcriber/NomoNativeHost.exe
+local-transcriber/tools/
+
+# WXT 构建产物与缓存
+.output/
+.wxt/
+stats.html
+*.zip
+
+# 日志
+*.log
+npm-debug.log*
+
+# 系统/编辑器
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 本机配置与密钥材料
+.env
+.env.*
+!.env.example
+.npmrc
+.netrc
+id_rsa
+id_ed25519
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.gpg
+*.asc
+*.mobileprovision
+credentials.json
+secrets.json
+*.local.json
+.claude/
